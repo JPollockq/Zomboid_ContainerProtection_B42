@@ -1,0 +1,9 @@
+Sandbox_EN = {
+	Sandbox_ContainerProtection = "Container Protection!",
+	
+	Sandbox_ContainerProtection_AdminPermissions = "Staff Permissions",
+	Sandbox_ContainerProtection_AdminPermissions_tooltip = "Allows Administrators and Moderators to destroy, disassemble or move objects around the world.",
+	
+	Sandbox_ContainerProtection_SafeHousePermissions = "Safe House Permissions",
+	Sandbox_ContainerProtection_SafeHousePermissions_tooltip = "Allows Safe House owners and members to manage containers inside their area.",
+}

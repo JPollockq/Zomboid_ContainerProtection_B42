@@ -1,0 +1,30 @@
+-- Sandbox Options Configuration File
+-- These options appear in the game's Sandbox settings menu
+-- Server administrators can customize protection behavior
+
+VERSION = 1,
+
+-- OPTION 1: Staff Override Permissions
+-- When enabled, players with Admin or Moderator access level can bypass
+-- all container protection and freely move/destroy protected containers.
+-- Useful for server management, event setup, and administrative tasks.
+-- Default: true (enabled)
+option ContainerProtection.AdminPermissions
+{
+	type = boolean, default = true,
+	page = ContainerProtection,
+	translation = ContainerProtection_AdminPermissions,
+}
+
+-- OPTION 2: SafeHouse Member Permissions  
+-- When enabled, SafeHouse owners and invited members can manage containers
+-- within their claimed SafeHouse areas, overriding room protection.
+-- This allows players to organize their claimed bases while protecting
+-- public/unclaimed areas from griefing.
+-- Default: true (enabled)
+option ContainerProtection.SafeHousePermissions
+{
+	type = boolean, default = true,
+	page = ContainerProtection,
+	translation = ContainerProtection_SafeHousePermissions,
+}
