@@ -4,9 +4,17 @@
 --          Build 42 Compatible - Updated for Project Zomboid Build 42+           --
 -----------------------------------------------------------------------------------
 
--- Load room definitions from external file
--- Note: In Build 42+, require statements no longer need the .lua extension
+-- Load required modules explicitly (PZWiki recommended practice)
+-- This ensures all dependencies are loaded before our code executes
 require "CP_RoomsDefinitions"
+
+-- Load PZ core classes that we will hook into
+-- These are Lua classes from the game's BuildingObjects and Moveables systems
+-- Source: media/lua/BuildingObjects/ and media/lua/Moveables/
+-- Explicit requires ensure proper load order and clear dependency declarations
+require "Moveables/ISMoveablesAction"
+require "BuildingObjects/ISDestroyCursor"
+require "BuildingObjects/ISMoveableCursor"
 
 ---------------------------------------------------------------------------------------------
 -- Default Configuration Settings
@@ -21,7 +29,7 @@ local blockedMoveableModes = {
 	rotate = true,
 	scrap = true,
 	place = false,
-};
+}
 
 ---------------------------------------------------------------------------------------------
 -- CORE VALIDATION FUNCTION: Checks if a square/room allows the specified action
@@ -37,19 +45,19 @@ local blockedMoveableModes = {
 
 local function isSquareValid(_square, _action)
 	-- Safety check: Allow action if no square is provided
-	if not _square then return true; end;
+	if not _square then return true end
 	
 	-- Get the room from the square - rooms define protected areas
-	local room = _square:getRoom();
-	if not room then return true; end; -- No room = outdoor/unprotected area
+	local room = _square:getRoom()
+	if not room then return true end -- No room = outdoor/unprotected area
 	
 	-- Get room name for lookup in protection table
-	local roomName = room:getName() or "Unknown";
+	local roomName = room:getName() or "Unknown"
 	
 	-- Build 42 Compatibility: Use getSpecificPlayer(0) instead of deprecated getPlayer()
 	-- In Build 42, getPlayer() is deprecated due to split-screen multiplayer support
 	local player = getSpecificPlayer(0)
-	if not player then return true; end; -- No player = allow (safety fallback)
+	if not player then return true end -- No player = allow (safety fallback)
 	
 		-- Check if this room is in our protection list
 		if protectedRooms[roomName] then
@@ -63,7 +71,7 @@ local function isSquareValid(_square, _action)
 						local accessLevel = player:getAccessLevel()
 						-- Grant full access to Admin and Moderator roles
 						if accessLevel == "Admin" or accessLevel == "Moderator" then
-							return true;
+							return true
 						end
 					end
 					
@@ -75,7 +83,7 @@ local function isSquareValid(_square, _action)
 						if safehouse then
 							-- Check if player is owner or has been granted access
 							if safehouse:isOwner(player) or safehouse:playerAllowed(player) then
-								return true; -- Allow access for SafeHouse members
+								return true -- Allow access for SafeHouse members
 							end
 						end
 					end
@@ -83,13 +91,12 @@ local function isSquareValid(_square, _action)
 				-- PROTECTION TRIGGERED: Display warning message
 				-- Show red text notification above player's head
 				-- Parameters: (message, red, green, blue, duration_ticks)
-				player:setHaloNote(getText("IGUI_ContainerProtected"), 255, 100, 100, 300);
-				return false;
+				player:setHaloNote(getText("IGUI_ContainerProtected"), 255, 100, 100, 300)
+				return false
 			end
 		end
 			
-	return true;
-
+	return true
 end
 
 ---------------------------------------------------------------------------------------------
@@ -112,11 +119,11 @@ local function isObjectProtected(_object)
 			-- Exclude "Thumpable" objects (player-built walls/structures)
 			-- These are meant to be destroyed and shouldn't be protected
 			if _object:getObjectName() ~= "Thumpable" then
-				return true; -- This is a protected world container
-			end;
-		end;
-	end;
-	return false; -- Not a container or is a destructible structure
+				return true -- This is a protected world container
+			end
+		end
+	end
+	return false -- Not a container or is a destructible structure
 end
 
 ---------------------------------------------------------------------------------------------
@@ -125,119 +132,110 @@ end
 -- This section hooks into Project Zomboid's native action validation functions.
 -- We store references to the original functions and replace them with our custom
 -- validation logic that adds room-based protection checks.
+--
+-- Pattern for each hook:
+--   1. Save original function reference (before overriding)
+--   2. Create new function that wraps the original
+--   3. Call original validation first
+--   4. Add our protection layer
+--   5. Return combined result
+--
+-- Note: By requiring the classes at the top of the file, we guarantee they exist here.
+-- This approach is recommended by PZWiki for reliable mod initialization.
 
 -- Store original validation function references
 -- These will be called first, then we add our protection layer
-local callback_ISMoveablesAction_isValid;  -- Handles pickup/place/rotate actions
-local callback_ISDestroyCursor_isValid;    -- Handles sledgehammer destruction
-local callback_ISMoveableCursor_isValid;   -- Handles cursor-based moveable preview
-
--- INITIALIZATION FUNCTION: Sets up all protection hooks
---
--- This function is called once when the game starts (OnGameStart event).
--- It replaces the game's standard validation functions with our protected versions.
---
--- The pattern for each hook:
---   1. Save original function reference
---   2. Replace with new function that:
---      a) Calls original validation first
---      b) Adds our room/container protection check
---      c) Returns final validation result
-local function initContainerProtection()
-	
-	-- HOOK 1: ISMoveablesAction - Handles furniture movement (pickup, rotate, scrap, place)
-	if ISMoveablesAction then
-		-- Store original validation function
-		callback_ISMoveablesAction_isValid = ISMoveablesAction.isValid;
-		
-		-- Override with protected version
-		ISMoveablesAction.isValid = function(self)
-			-- First, run the game's original validation
-			local retVal = callback_ISMoveablesAction_isValid(self);
-			
-			-- Only add protection check if base validation passed
-			if retVal == true then
-				-- Check if this action mode is in our blocked list
-				if blockedMoveableModes[self.mode] then
-					-- Verify the object is a protected container
-					if self.moveProps and isObjectProtected(self.moveProps.object) then
-						-- Apply room-based validation
-						retVal = isSquareValid(self.square, "ISMoveablesAction");
-					end;
-				end;
-			end;
-			return retVal;
-		end;
-	end;
-
-	-- HOOK 2: ISDestroyCursor - Handles sledgehammer destruction
-	if ISDestroyCursor then
-		-- Store original validation function
-		callback_ISDestroyCursor_isValid = ISDestroyCursor.isValid;
-		
-		-- Override with protected version
-		ISDestroyCursor.isValid = function(self, _square)
-			-- Run original game validation
-			local retVal = callback_ISDestroyCursor_isValid(self, _square);
-			
-			-- Add protection check if base validation passed
-			if retVal == true then
-				-- Check if targeting a protected container
-				if isObjectProtected(self.currentObject) then
-					-- Apply room-based validation
-					retVal = isSquareValid(_square, "ISDestroyCursor");
-				end;
-			end;
-			return retVal;
-		end;
-	end;
-
-	-- HOOK 3: ISMoveableCursor - Handles cursor preview when selecting moveables
-	if ISMoveableCursor then
-		-- Store original validation function
-		callback_ISMoveableCursor_isValid = ISMoveableCursor.isValid;
-		
-		-- Override with protected version
-		ISMoveableCursor.isValid = function(self, _square)
-			-- Run original game validation
-			local retVal = callback_ISMoveableCursor_isValid(self, _square);
-			
-			-- Add protection check if base validation passed
-			if retVal == true then
-				-- Check if this cursor mode is blocked
-				if blockedMoveableModes[ISMoveableCursor.mode[self.player]] then
-					-- Check if targeting a protected container
-					if isObjectProtected(self.cacheObject) then
-						-- Apply room-based validation
-						retVal = isSquareValid(_square, "ISMoveableCursor");
-					end;
-				end;
-			end;
-			
-			-- Visual feedback: Turn cursor red if action is blocked
-			if not retVal then 
-				self.colorMod = {r=1, g=0, b=0}; -- RGB red color
-			end;
-			
-			return retVal or false;
-		end;
-	end;
-end;
+local original_ISMoveablesAction_isValid = ISMoveablesAction.isValid
+local original_ISDestroyCursor_isValid = ISDestroyCursor.isValid
+local original_ISMoveableCursor_isValid = ISMoveableCursor.isValid
 
 ---------------------------------------------------------------------------------------------
--- EVENT REGISTRATION
+-- HOOK 1: ISMoveablesAction.isValid
+-- Handles furniture movement actions (pickup, rotate, scrap, place)
 --
--- Build 42 Compatibility Note:
--- Changed from Events.EveryOneMinute to Events.OnGameStart for better performance.
+-- This function is called by the game whenever a player attempts to interact
+-- with a moveable object (furniture, containers, etc.)
+
+function ISMoveablesAction:isValid()
+	-- First, run the game's original validation
+	local retVal = original_ISMoveablesAction_isValid(self)
+	
+	-- Only add protection check if base validation passed
+	if retVal == true then
+		-- Check if this action mode is in our blocked list
+		if blockedMoveableModes[self.mode] then
+			-- Verify the object is a protected container
+			if self.moveProps and isObjectProtected(self.moveProps.object) then
+				-- Apply room-based validation
+				retVal = isSquareValid(self.square, "ISMoveablesAction")
+			end
+		end
+	end
+	
+	return retVal
+end
+
+---------------------------------------------------------------------------------------------
+-- HOOK 2: ISDestroyCursor.isValid
+-- Handles sledgehammer destruction validation
 --
--- Why OnGameStart?
---   - Runs once when game fully loads (more efficient than every minute)
---   - All game systems are initialized and ready
---   - ISMoveablesAction, ISDestroyCursor, ISMoveableCursor classes are available
---   - Reduces unnecessary repeated initialization attempts
+-- Called when player hovers with sledgehammer to show if object can be destroyed
+
+function ISDestroyCursor:isValid(square)
+	-- Run original game validation
+	local retVal = original_ISDestroyCursor_isValid(self, square)
+	
+	-- Add protection check if base validation passed
+	if retVal == true then
+		-- Check if targeting a protected container
+		if isObjectProtected(self.currentObject) then
+			-- Apply room-based validation
+			retVal = isSquareValid(square, "ISDestroyCursor")
+		end
+	end
+	
+	return retVal
+end
+
+---------------------------------------------------------------------------------------------
+-- HOOK 3: ISMoveableCursor.isValid
+-- Handles cursor preview when selecting moveables
 --
--- Event fires after:
---   - World is loaded
---   - Player character is spawned
---   - All game systems are initialized
-Events.OnGameStart.Add(initContainerProtection);
+-- Provides visual feedback (green/red cursor) before player commits to action
+
+function ISMoveableCursor:isValid(square)
+	-- Run original game validation
+	local retVal = original_ISMoveableCursor_isValid(self, square)
+	
+	-- Add protection check if base validation passed
+	if retVal == true then
+		-- Check if this cursor mode is blocked
+		if blockedMoveableModes[ISMoveableCursor.mode[self.player]] then
+			-- Check if targeting a protected container
+			if isObjectProtected(self.cacheObject) then
+				-- Apply room-based validation
+				retVal = isSquareValid(square, "ISMoveableCursor")
+			end
+		end
+	end
+	
+	-- Visual feedback: Turn cursor red if action is blocked
+	if not retVal then 
+		self.colorMod = {r=1, g=0, b=0} -- RGB red color
+	end
+	
+	return retVal or false
+end
+
+---------------------------------------------------------------------------------------------
+-- INITIALIZATION COMPLETE
+-- Debug logging for troubleshooting (appears in console.txt)
+-- Confirms that the mod loaded successfully and hooks are in place
+
+print("[Container Protection] Build 42 - Hooks installed successfully")
+print("[Container Protection] Protected room types: " .. (protectedRooms and "Loaded" or "ERROR: Not loaded!"))
+if protectedRooms then
+	local count = 0
+	for _ in pairs(protectedRooms) do count = count + 1 end
+	print("[Container Protection] Total protected room types: " .. count)
+end
