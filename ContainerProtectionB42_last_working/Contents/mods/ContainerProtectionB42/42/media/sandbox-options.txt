@@ -1,0 +1,15 @@
+VERSION = 1,
+
+option ContainerProtection.AdminPermissions
+{
+	type = boolean, default = true,
+	page = ContainerProtection,
+	translation = ContainerProtection_AdminPermissions,
+}
+
+option ContainerProtection.SafeHousePermissions
+{
+	type = boolean, default = true,
+	page = ContainerProtection,
+	translation = ContainerProtection_SafeHousePermissions,
+}

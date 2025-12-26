@@ -1,0 +1,9 @@
+Sandbox_PTBR = {
+	Sandbox_ContainerProtection = "Container Protection!",
+	
+	Sandbox_ContainerProtection_AdminPermissions = "Permissões da Staff",
+	Sandbox_ContainerProtection_AdminPermissions_tooltip = "Permite que Administradores e Moderadores controlem containers sem restrições.",
+	
+	Sandbox_ContainerProtection_SafeHousePermissions = "Permissões de SafeHouse",
+	Sandbox_ContainerProtection_SafeHousePermissions_tooltip = "Permite que donos e membros de Safehouses controlem containers sem restrições em suas respectivas áreas.",
+}

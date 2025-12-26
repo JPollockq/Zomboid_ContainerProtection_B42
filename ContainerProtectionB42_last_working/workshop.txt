@@ -1,0 +1,6 @@
+version=1
+id=3631975608
+title=Container Protection B42 test
+description=This is a test mod.
+tags=Build 42
+visibility=public
